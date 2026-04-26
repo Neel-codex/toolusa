@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>USA Niche & Keyword Finder | Auto-Scraper</title>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --primary-hover: #1d4ed8;
+            --bg: #f8fafc;
+            --card-bg: #ffffff;
+            --text: #0f172a;
+            --text-light: #64748b;
+            --border: #e2e8f0;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg);
+            color: var(--text);
+            padding: 2rem;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+            color: var(--primary);
+        }
+
+        p.subtitle {
+            color: var(--text-light);
+        }
+
+        .search-box {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 1.5rem;
+            background: var(--card-bg);
+            padding: 1.5rem;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+        }
+
+        input[type="text"] {
+            flex: 1;
+            padding: 12px 16px;
+            font-size: 1.1rem;
+            border: 2px solid var(--border);
+            border-radius: 8px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        input[type="text"]:focus {
+            border-color: var(--primary);
+        }
+
+        button {
+            padding: 12px 24px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        button:hover {
+            background-color: var(--primary-hover);
+        }
+
+        button:disabled {
+            background-color: var(--text-light);
+            cursor: not-allowed;
+        }
+
+        .controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        #status {
+            font-weight: 600;
+            color: var(--primary);
+        }
+
+        .results-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 15px;
+        }
+
+        .keyword-card {
+            background: var(--card-bg);
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1);
+            font-size: 0.95rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .keyword-card span {
+            word-break: break-word;
+        }
+        
+        .copy-btn {
+            background: none;
+            color: var(--primary);
+            padding: 5px 10px;
+            font-size: 0.8rem;
+            border: 1px solid var(--primary);
+            margin-left: 10px;
+        }
+        
+        .copy-btn:hover {
+            background: var(--primary);
+            color: white;
+        }
+
+        @media (max-width: 600px) {
+            .search-box {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <header>
+            <h1>USA Niche & Keyword Finder</h1>
+            <p class="subtitle">Real-time data • USA Target • Automatic A-Z Expansion</p>
+        </header>
+
+        <div class="search-box">
+            <input type="text" id="seedKeyword" placeholder="Enter a seed keyword (e.g., drone, dog food, running shoes)">
+            <button id="searchBtn" onclick="startScraping()">Find Niches</button>
+        </div>
+
+        <div class="controls">
+            <div id="status">Waiting for input...</div>
+            <button id="exportBtn" onclick="exportToCSV()" style="display: none;">Export to CSV</button>
+        </div>
+
+        <div class="results-grid" id="results"></div>
+    </div>
+
+    <script>
+        const resultsContainer = document.getElementById('results');
+        const statusText = document.getElementById('status');
+        const searchBtn = document.getElementById('searchBtn');
+        const exportBtn = document.getElementById('exportBtn');
+        
+        let foundKeywords = new Set();
+        let isRunning = false;
+
+        // Fetch from Google Autocomplete using AllOrigins Proxy to bypass CORS on GitHub Pages
+        async function fetchGoogleSuggestions(query) {
+            // gl=us forces USA geolocation, hl=en forces English
+            const googleUrl = `http://suggestqueries.google.com/complete/search?client=chrome&gl=us&hl=en&q=${encodeURIComponent(query)}`;
+            const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(googleUrl)}`;
+
+            try {
+                const response = await fetch(proxyUrl);
+                if (!response.ok) return [];
+                const data = await response.json();
+                const parsed = JSON.parse(data.contents);
+                return parsed[1] || []; // Index 1 contains the array of suggestions
+            } catch (error) {
+                console.error("Fetch error:", error);
+                return [];
+            }
+        }
+
+        async function startScraping() {
+            const seed = document.getElementById('seedKeyword').value.trim();
+            if (!seed) return alert("Please enter a seed keyword!");
+
+            isRunning = true;
+            searchBtn.disabled = true;
+            exportBtn.style.display = 'none';
+            foundKeywords.clear();
+            resultsContainer.innerHTML = '';
+            
+            // Generate automatic variations for deep niche finding
+            const variations = [
+                seed,
+                `best ${seed}`,
+                `how to ${seed}`,
+                `${seed} for`,
+                `${seed} vs`,
+                `cheap ${seed}`
+            ];
+
+            // Add the A-Z alphabet method (e.g., "seed a", "seed b")
+            for (let i = 97; i <= 122; i++) {
+                variations.push(`${seed} ${String.fromCharCode(i)}`);
+            }
+
+            statusText.innerText = `Connecting to US real-time data...`;
+
+            for (let i = 0; i < variations.length; i++) {
+                if (!isRunning) break;
+                
+                const query = variations[i];
+                statusText.innerText = `Scraping US data for: "${query}" (${i + 1}/${variations.length})`;
+                
+                const suggestions = await fetchGoogleSuggestions(query);
+                
+                suggestions.forEach(keyword => {
+                    // Only add if we haven't seen it yet
+                    if (!foundKeywords.has(keyword)) {
+                        foundKeywords.add(keyword);
+                        renderKeyword(keyword);
+                    }
+                });
+
+                // Small delay to prevent API rate limiting
+                await new Promise(resolve => setTimeout(resolve, 400));
+            }
+
+            statusText.innerText = `Finished! Found ${foundKeywords.size} unique USA niche keywords.`;
+            searchBtn.disabled = false;
+            isRunning = false;
+            
+            if (foundKeywords.size > 0) {
+                exportBtn.style.display = 'block';
+            }
+        }
+
+        function renderKeyword(keyword) {
+            const div = document.createElement('div');
+            div.className = 'keyword-card';
+            
+            const span = document.createElement('span');
+            span.innerText = keyword;
+            
+            const btn = document.createElement('button');
+            btn.className = 'copy-btn';
+            btn.innerText = 'Copy';
+            btn.onclick = () => {
+                navigator.clipboard.writeText(keyword);
+                btn.innerText = 'Copied!';
+                setTimeout(() => btn.innerText = 'Copy', 1500);
+            };
+
+            div.appendChild(span);
+            div.appendChild(btn);
+            resultsContainer.appendChild(div);
+        }
+
+        function exportToCSV() {
+            if (foundKeywords.size === 0) return;
+            
+            const csvContent = "data:text/csv;charset=utf-8," 
+                + "Keyword\n" 
+                + Array.from(foundKeywords).join("\n");
+                
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", "usa_niches.csv");
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+    </script>
+</body>
+</html>
